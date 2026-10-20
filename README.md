@@ -1,2 +1,0 @@
-# my-argocd-repo
-argocd

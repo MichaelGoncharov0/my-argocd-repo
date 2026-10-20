@@ -1,0 +1,177 @@
+suite: Controller HTTPRoute
+release:
+  name: my-release
+  namespace: my-namespace
+templates:
+  - jenkins-controller-httproute.yaml
+tests:
+  - it: reuses ingress hostnames when reuse is enabled
+    set:
+      controller:
+        ingress:
+          hostName: jenkins.example.com
+          resourceRootUrl: root.jenkins.example.com
+        httpRoute:
+          enabled: true
+          apiVersion: gateway.networking.k8s.io/v1
+          kind: HTTPRoute
+          reuseIngressConfiguration: true
+          parentRefs:
+            - name: shared-gateway
+              namespace: networking
+    asserts:
+      - isKind:
+          of: HTTPRoute
+      - equal:
+          path: spec.hostnames
+          value:
+            - jenkins.example.com
+            - root.jenkins.example.com
+  - it: uses explicit hostnames when reuse is disabled
+    set:
+      controller:
+        httpRoute:
+          enabled: true
+          apiVersion: gateway.networking.k8s.io/v1
+          kind: HTTPRoute
+          reuseIngressConfiguration: false
+          hostnames:
+            - external.jenkins.example.com
+            - internal.jenkins.example.com
+          parentRefs:
+            - name: shared-gateway
+              namespace: networking
+    asserts:
+      - isKind:
+          of: HTTPRoute
+      - equal:
+          path: spec.hostnames
+          value:
+            - external.jenkins.example.com
+            - internal.jenkins.example.com
+  - it: renders annotations when set
+    set:
+      controller:
+        httpRoute:
+          enabled: true
+          apiVersion: gateway.networking.k8s.io/v1
+          kind: HTTPRoute
+          reuseIngressConfiguration: false
+          hostnames:
+            - jenkins.example.com
+          parentRefs:
+            - name: shared-gateway
+              namespace: networking
+          annotations:
+            example.com/key: value
+            another.io/annotation: "true"
+    asserts:
+      - equal:
+          path: metadata.annotations
+          value:
+            example.com/key: value
+            another.io/annotation: "true"
+  - it: does not render annotations when not set
+    set:
+      controller:
+        httpRoute:
+          enabled: true
+          apiVersion: gateway.networking.k8s.io/v1
+          kind: HTTPRoute
+          reuseIngressConfiguration: false
+          hostnames:
+            - jenkins.example.com
+          parentRefs:
+            - name: shared-gateway
+              namespace: networking
+    asserts:
+      - notExists:
+          path: metadata.annotations
+  - it: renders filters on the default rule when extra rules are configured
+    set:
+      controller:
+        httpRoute:
+          enabled: true
+          apiVersion: gateway.networking.k8s.io/v1
+          kind: HTTPRoute
+          reuseIngressConfiguration: false
+          hostnames:
+            - jenkins.example.com
+          parentRefs:
+            - name: shared-gateway
+              namespace: networking
+          extraRules:
+            - matches:
+                - path:
+                    type: PathPrefix
+                    value: /health
+              backendRefs:
+                - name: health-service
+                  port: 8081
+          filters:
+            - type: ResponseHeaderModifier
+              responseHeaderModifier:
+                set:
+                  - name: Strict-Transport-Security
+                    value: "max-age=31536000; includeSubDomains"
+                  - name: X-Jenkins-Release
+                    value: "{{ .Release.Name }}"
+    asserts:
+      - notExists:
+          path: spec.rules[0].filters
+      - equal:
+          path: spec.rules[1].backendRefs
+          value:
+            - name: my-release-jenkins
+              port: 8080
+      - equal:
+          path: spec.rules[1].filters
+          value:
+            - type: ResponseHeaderModifier
+              responseHeaderModifier:
+                set:
+                  - name: Strict-Transport-Security
+                    value: "max-age=31536000; includeSubDomains"
+                  - name: X-Jenkins-Release
+                    value: my-release
+  - it: renders timeouts on the default rule when set
+    set:
+      controller:
+        httpRoute:
+          enabled: true
+          timeouts:
+            request: 300s
+            backendRequest: 300s
+    asserts:
+      - equal:
+          path: spec.rules[0].timeouts
+          value:
+            request: 300s
+            backendRequest: 300s
+  - it: does not render timeouts when not set
+    set:
+      controller:
+        httpRoute:
+          enabled: true
+    asserts:
+      - notExists:
+          path: spec.rules[0].timeouts
+  - it: matches snapshot
+    set:
+      controller:
+        httpRoute:
+          enabled: true
+          apiVersion: gateway.networking.k8s.io/v1
+          kind: HTTPRoute
+          reuseIngressConfiguration: false
+          hostnames:
+            - external.jenkins.example.com
+            - internal.jenkins.example.com
+          parentRefs:
+            - name: shared-gateway
+              namespace: networking
+    asserts:
+      - notExists:
+          path: spec.rules[0].filters
+      - matchSnapshot:
+          path: spec
