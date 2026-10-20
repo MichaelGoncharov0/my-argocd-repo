@@ -1,1 +1,4 @@
-serviceType: NodePort
+controller:
+  serviceType: NodePort
+  nodePort: 8080
+  installPlugins: false
