@@ -1,4 +1,4 @@
 controller:
   serviceType: NodePort
-  nodePort: 8080
+  nodePort: 32000
   installPlugins: false
